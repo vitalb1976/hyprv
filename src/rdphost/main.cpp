@@ -86,6 +86,85 @@ namespace
     HWND     g_top  = nullptr;
     RdpHost* g_host = nullptr;
 
+    constexpr UINT WM_HYPRV_RELEASE_FOCUS = WM_USER + 102;
+    constexpr UINT WM_HYPRV_MODIFIER_TRACE = WM_USER + 103;
+    HHOOK g_keyboardHook = nullptr;
+    uint32_t g_releaseShortcut = 7; // Ctrl+Alt+Shift, no terminal key.
+    bool g_keys[256]{};
+    bool g_releaseArmed = false;
+    bool g_terminalConsumed = false;
+    bool g_chordCancelled = false;
+
+    // Focus may be reported on a XAML input sink in the owner process
+    // because its input queue is attached to ours. A visible session in the
+    // foreground owner chain is sufficient; hidden/background tabs must not act.
+    bool SessionHasKeyboardFocus()
+    {
+        if (!g_top || !IsWindowVisible(g_top)) return false;
+        HWND foreground = GetAncestor(GetForegroundWindow(), GA_ROOT);
+        HWND owner = GetWindow(g_top, GW_OWNER);
+        return foreground == g_top || (owner && foreground == GetAncestor(owner, GA_ROOT));
+    }
+
+    uint32_t ReleaseModifiers()
+    {
+        return ((g_keys[VK_LCONTROL] || g_keys[VK_RCONTROL] || g_keys[VK_CONTROL]) ? 1u : 0u)
+            | ((g_keys[VK_LMENU] || g_keys[VK_RMENU] || g_keys[VK_MENU]) ? 2u : 0u)
+            | ((g_keys[VK_LSHIFT] || g_keys[VK_RSHIFT] || g_keys[VK_SHIFT]) ? 4u : 0u);
+    }
+
+    LRESULT CALLBACK ReleaseKeyboardHook(int code, WPARAM message, LPARAM data)
+    {
+        if (code != HC_ACTION) return CallNextHookEx(nullptr, code, message, data);
+        const auto& key = *reinterpret_cast<KBDLLHOOKSTRUCT const*>(data);
+        if (key.vkCode >= 256)
+            return CallNextHookEx(nullptr, code, message, data);
+        const bool down = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
+        const bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
+        if (!down && !up) return CallNextHookEx(nullptr, code, message, data);
+        g_keys[key.vkCode] = down;
+        const auto mods = ReleaseModifiers();
+        const auto wantedMods = g_releaseShortcut & 7u;
+        const auto terminal = (g_releaseShortcut >> 8) & 255u;
+        const bool modifier = key.vkCode == VK_CONTROL || key.vkCode == VK_LCONTROL || key.vkCode == VK_RCONTROL
+            || key.vkCode == VK_MENU || key.vkCode == VK_LMENU || key.vkCode == VK_RMENU
+            || key.vkCode == VK_SHIFT || key.vkCode == VK_LSHIFT || key.vkCode == VK_RSHIFT;
+        const bool sessionActive = SessionHasKeyboardFocus();
+        // Do not discard injected input: host-side remote-control software
+        // can deliver legitimate shortcut keystrokes using SendInput.
+        // Trace only modifier masks, never ordinary typed keys, outside the hook.
+        if (modifier)
+            PostMessageW(g_top, WM_HYPRV_MODIFIER_TRACE, mods,
+                (sessionActive ? 1 : 0) | ((key.flags & LLKHF_INJECTED) ? 2 : 0));
+        if (!sessionActive)
+        {
+            g_releaseArmed = false;
+            g_terminalConsumed = false;
+            g_chordCancelled = false;
+            return CallNextHookEx(nullptr, code, message, data);
+        }
+        // Keep guest modifier key-ups intact. Only consume the optional terminal
+        // key, and transfer focus after every key in the chord has been released.
+        bool consume = terminal != 0 && key.vkCode == terminal && g_terminalConsumed;
+        if (down && !modifier && key.vkCode != terminal) g_chordCancelled = true;
+        if (down && (mods & ~wantedMods) != 0) g_chordCancelled = true;
+        if (down && !g_chordCancelled && mods == wantedMods && wantedMods != 0
+            && (terminal == 0 || (down && key.vkCode == terminal)))
+        {
+            g_releaseArmed = true;
+            if (terminal != 0) { g_terminalConsumed = true; consume = true; }
+        }
+        if (mods == 0 && (terminal == 0 || !g_keys[terminal]))
+        {
+            if (g_releaseArmed && !g_chordCancelled)
+                PostMessageW(g_top, WM_HYPRV_RELEASE_FOCUS, 0, 0);
+            g_releaseArmed = false;
+            g_terminalConsumed = false;
+            g_chordCancelled = false;
+        }
+        return consume ? 1 : CallNextHookEx(nullptr, code, message, data);
+    }
+
     // Decode the trailing UTF-8 server/domain/username bytes that follow an
     // RdpOptions payload (in that order). username is v3 — absent (userByteLen=0)
     // for VM-console connections, present for generic Remote Host connections.
@@ -110,6 +189,18 @@ namespace
 
         switch (static_cast<ipc::P2C>(msg.header.type))
         {
+        case ipc::P2C::SetReleaseShortcut:
+            if (size == sizeof(uint32_t))
+            {
+                uint32_t shortcut = 0;
+                memcpy(&shortcut, payload, sizeof(shortcut));
+                if ((shortcut & ~0xFF07u) == 0 && (shortcut & 7u) != 0)
+                {
+                    g_releaseShortcut = shortcut;
+                    HyprvLog(L"[focus] configured modifiers=%u key=%u", shortcut & 7u, shortcut >> 8);
+                }
+            }
+            break;
         case ipc::P2C::Connect:
         {
             if (size < sizeof(ipc::Connect)) break;
@@ -192,6 +283,28 @@ namespace
             return 0;
         }
 
+        case WM_HYPRV_MODIFIER_TRACE:
+            HyprvLog(L"[focus] modifiers=%u sessionActive=%d injected=%d",
+                static_cast<unsigned>(w), (l & 1) != 0, (l & 2) != 0);
+            return 0;
+        case WM_HYPRV_RELEASE_FOCUS:
+        {
+            // A posted message keeps pipe I/O outside the low-level hook.
+            // Ignore stale requests if focus has already left this session.
+            const bool focused = SessionHasKeyboardFocus();
+            HyprvLog(L"[focus] chord released; sessionFocused=%d", focused);
+            if (focused && g_ipcLogger)
+            {
+                DWORD ownerPid = 0;
+                GetWindowThreadProcessId(GetWindow(h, GW_OWNER), &ownerPid);
+                ReleaseCapture();
+                ClipCursor(nullptr);
+                if (ownerPid) AllowSetForegroundWindow(ownerPid);
+                const bool sent = g_ipcLogger->Send(ipc::C2P::ReleaseFocus, nullptr, 0);
+                HyprvLog(L"[focus] ReleaseFocus IPC sent=%d", sent);
+            }
+            return 0;
+        }
         case WM_SETFOCUS:
             if (HWND ax = GetWindow(h, GW_CHILD)) SetFocus(ax);
             return 0;
@@ -328,6 +441,13 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR cmdLine, int)
     // Safe to flip logging over IPC from this point.
     g_ipcLogger = &ipc;
 
+    for (int key = 0; key < 256; ++key)
+        g_keys[key] = (GetAsyncKeyState(key) & 0x8000) != 0;
+    g_keys[VK_CONTROL] = g_keys[VK_MENU] = g_keys[VK_SHIFT] = false;
+    g_keyboardHook = SetWindowsHookExW(WH_KEYBOARD_LL, ReleaseKeyboardHook, hInstance, 0);
+    if (!g_keyboardHook) HyprvLog(L"[focus] keyboard hook failed: %lu", GetLastError());
+    else HyprvLog(L"[focus] keyboard hook installed");
+
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0))
     {
@@ -338,6 +458,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR cmdLine, int)
     // Stop logging via IPC BEFORE we tear the pipe down — otherwise late
     // log calls during shutdown would dereference a half-destroyed IpcClient.
     // From here on logs route to OutputDebugStringW.
+    if (g_keyboardHook) { UnhookWindowsHookEx(g_keyboardHook); g_keyboardHook = nullptr; }
     g_ipcLogger = nullptr;
     ipc.Stop();
     g_host = nullptr;

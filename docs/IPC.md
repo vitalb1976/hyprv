@@ -118,3 +118,21 @@ The parent (`VmTabPage`) does NOT surface every fatal drop — it gates on wheth
 6. Build both targets — the `static_assert` is your guard against forgetting half the change.
 
 Treat `src/shared/RdpIpc.h` changes as a wire-protocol bump. They need to land atomically — both `hyprv.exe` and `hyprv-rdphost.exe` are rebuilt together from the same source.
+
+
+## Focus release (protocol v4)
+
+`SetReleaseShortcut` (P2C 11) carries one uint32: Ctrl=1, Alt=2,
+Shift=4 in the low byte; an optional Windows virtual key is in bits 8–15.
+The default is 7 (Ctrl+Alt+Shift). Parent sends it before Connect.
+`ReleaseFocus` (C2P 138) has no payload. The child posts it only for a
+foreground session after the entire chord is released. The parent dispatches
+onto its UI thread, detaches cross-process input, activates the owning window,
+and focuses the selected tab. No disconnect occurs. The optional terminal key
+is consumed locally; modifier events remain available to the guest so key-up
+state is not stranded. Extra keys cancel the chord. No pipe writes or UI work
+run inside the keyboard hook. Hook removal precedes pipe shutdown.
+
+The shortcut is persisted under general.releaseShortcut. General settings expose
+modifier and optional-key choices; edits apply when the session next connects.
+Both executables must be rebuilt together for protocol v4.

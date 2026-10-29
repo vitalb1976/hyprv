@@ -1,4 +1,5 @@
 #include "rdp/RdpHostClient.h"
+#include "settings/Settings.h"
 
 #include <objbase.h>
 #include <combaseapi.h>
@@ -533,6 +534,10 @@ namespace hyprv::app
                     owner->OnError(e.code);
                 }
                 break;
+            case hyprv::ipc::C2P::ReleaseFocus:
+                HyprvAppLog(L"[focus] ReleaseFocus IPC received; callback=%d", owner->OnReleaseFocus ? 1 : 0);
+                if (payload.empty() && owner->OnReleaseFocus) owner->OnReleaseFocus();
+                break;
             case hyprv::ipc::C2P::LogLine:
                 if (payload.size() >= sizeof(hyprv::ipc::LogLine))
                 {
@@ -602,6 +607,24 @@ namespace hyprv::app
 
     HWND RdpHostClient::childHwnd() const { return m_impl ? m_impl->childHwnd : nullptr; }
 
+    void RdpHostClient::ReleaseFocus()
+    {
+        if (!m_impl->childHwnd) return;
+        HWND window = GetWindow(m_impl->childHwnd, GW_OWNER);
+        HWND foreground = GetAncestor(GetForegroundWindow(), GA_ROOT);
+        const bool active = IsWindowVisible(m_impl->childHwnd)
+            && (foreground == m_impl->childHwnd
+                || (window && foreground == GetAncestor(window, GA_ROOT)));
+        HyprvAppLog(L"[focus] UI handoff: active=%d child=%p owner=%p", active, m_impl->childHwnd, window);
+        if (!active) return; // Ignore stale notifications after switching apps/tabs.
+        m_impl->DetachInputNow();
+        if (window)
+        {
+            const BOOL posted = PostMessageW(window, hyprv::ipc::kReleaseFocusWindowMessage, 0, 0);
+            HyprvAppLog(L"[focus] owner message posted=%d", posted);
+        }
+    }
+
     bool RdpHostClient::ConnectLocalVm(HWND ownerHwnd, int sx, int sy, int w, int h,
                                        GUID const& vmGuid,
                                        hyprv::ipc::RdpOptions const& opts)
@@ -609,6 +632,8 @@ namespace hyprv::app
         if (!m_impl->SpawnAndHandshake()) return false;
 
         m_impl->EmbedInto(ownerHwnd, sx, sy, w, h);
+        const uint32_t shortcut = hyprv::app::settings::Settings::Instance().ReleaseShortcut();
+        m_impl->SendP2C(hyprv::ipc::P2C::SetReleaseShortcut, &shortcut, sizeof(shortcut));
 
         // Build ConnectLocalVm payload: ConnectLocalVm struct + server bytes + domain bytes.
         const std::string server = "localhost";
@@ -637,6 +662,8 @@ namespace hyprv::app
         if (!m_impl->SpawnAndHandshake()) return false;
 
         m_impl->EmbedInto(ownerHwnd, sx, sy, w, h);
+        const uint32_t shortcut = hyprv::app::settings::Settings::Instance().ReleaseShortcut();
+        m_impl->SendP2C(hyprv::ipc::P2C::SetReleaseShortcut, &shortcut, sizeof(shortcut));
 
         // UTF-16 -> UTF-8 for the wire strings.
         auto toUtf8 = [](std::wstring const& w) {

@@ -53,6 +53,8 @@ namespace hyprv::app
     public:
         // ---- callbacks (set before calling Connect/ConnectLocalVm) ----
         std::function<void()>                          OnConnecting;
+        std::function<void()>                          OnReleaseFocus;
+        void ReleaseFocus(); // UI thread only
         std::function<void(ConnectedInfo const&)>      OnConnected;
         std::function<void(bool /*ready*/)>            OnEnhancedReady;
         std::function<void(DisconnectedInfo const&)>   OnDisconnected;

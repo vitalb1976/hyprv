@@ -54,6 +54,7 @@ namespace hyprv::app::settings
         // replace-on-open gesture that closes the home tab. Default false =
         // current browser-new-tab-page behaviour.
         bool keepHomeTabOpen = false;
+        uint32_t releaseShortcut = 7; // Ctrl=1, Alt=2, Shift=4; VK in bits 8..15.
     };
 
     // VM debugger launch — a niche feature (gated by `enabled`, off by
@@ -253,6 +254,8 @@ namespace hyprv::app::settings
         void SetLoggingEnabled(bool on);
 
         // ---- General behaviour ---------------------------------------------
+        uint32_t ReleaseShortcut() const;
+        void SetReleaseShortcut(uint32_t shortcut);
         bool KeepHomeTabOpen() const;
         void SetKeepHomeTabOpen(bool on);
 

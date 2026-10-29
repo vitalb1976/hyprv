@@ -127,6 +127,23 @@ namespace hyprv::app::settings
         MarkDirty();
     }
 
+    uint32_t Settings::ReleaseShortcut() const
+    {
+        std::lock_guard<std::mutex> lk(m_lock);
+        return m_general.releaseShortcut;
+    }
+
+    void Settings::SetReleaseShortcut(uint32_t shortcut)
+    {
+        if ((shortcut & ~0xFF07u) != 0 || (shortcut & 7u) == 0) return;
+        {
+            std::lock_guard<std::mutex> lk(m_lock);
+            if (m_general.releaseShortcut == shortcut) return;
+            m_general.releaseShortcut = shortcut;
+        }
+        MarkDirty();
+    }
+
     bool Settings::KeepHomeTabOpen() const
     {
         std::lock_guard<std::mutex> lk(m_lock);
@@ -838,6 +855,11 @@ namespace hyprv::app::settings
         if (root.HasKey(L"general"))
         {
             auto gen = root.GetNamedObject(L"general");
+            double shortcut = gen.GetNamedNumber(L"releaseShortcut", 7);
+            if (shortcut >= 1 && shortcut <= 0xFF07 && shortcut == static_cast<uint32_t>(shortcut)
+                && (static_cast<uint32_t>(shortcut) & ~0xFF07u) == 0
+                && (static_cast<uint32_t>(shortcut) & 7u) != 0)
+                m_general.releaseShortcut = static_cast<uint32_t>(shortcut);
             if (gen.HasKey(L"keepHomeTabOpen"))
                 m_general.keepHomeTabOpen =
                     gen.GetNamedBoolean(L"keepHomeTabOpen", m_general.keepHomeTabOpen);
@@ -1112,6 +1134,7 @@ namespace hyprv::app::settings
         out += L"  \"general\": {\n";
         out += L"    \"keepHomeTabOpen\": ";
         out += m_general.keepHomeTabOpen ? L"true" : L"false";
+        out += L",\n    \"releaseShortcut\": " + std::to_wstring(m_general.releaseShortcut);
         out += L"\n  },\n";
 
         // Debugger (global).

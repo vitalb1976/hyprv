@@ -6,6 +6,7 @@
 
 #include "VmTabPage.xaml.h"
 #include "vm/VMManager.h"
+#include "RdpIpc.h"
 #include "wmi/WmiScope.h"
 #include "settings/Settings.h"
 #include "ui/VmTileFactory.h"
@@ -1051,6 +1052,19 @@ namespace winrt::hyprv_app::implementation
     LRESULT CALLBACK MainWindow::WindowSubclassProc(HWND hwnd, UINT msg,
         WPARAM wParam, LPARAM lParam, UINT_PTR /*id*/, DWORD_PTR refData)
     {
+        if (msg == hyprv::ipc::kReleaseFocusWindowMessage)
+        {
+            HyprvAppLog(L"[focus] owner received release-focus message");
+            auto* self = reinterpret_cast<MainWindow*>(refData);
+            if (self)
+            {
+                SetForegroundWindow(hwnd);
+                if (auto tv = self->tabView())
+                    if (auto tab = tv.SelectedItem().try_as<Microsoft::UI::Xaml::Controls::TabViewItem>())
+                        tab.Focus(Microsoft::UI::Xaml::FocusState::Programmatic);
+            }
+            return 0;
+        }
         // Owner-window position/size changes don't propagate to owned popups.
         // Refresh on WM_WINDOWPOSCHANGED (covers both moves and resizes) and
         // WM_DPICHANGED. Routed to the currently-active tab; others stay

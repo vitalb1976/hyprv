@@ -433,6 +433,44 @@ namespace winrt::hyprv_app::implementation
                 L"home tab open vm remote host session replace welcome keep new tab");
         }
 
+        {
+            const auto shortcut = s.ReleaseShortcut();
+            auto mods = MakeComboRow(L"Release session focus — modifiers",
+                L"Press and release the shortcut to return to the tab bar. Applies on the next connection.",
+                { L"Ctrl", L"Alt", L"Ctrl+Alt", L"Shift", L"Ctrl+Shift", L"Alt+Shift", L"Ctrl+Alt+Shift" },
+                static_cast<int>((shortcut & 7u) - 1), [](int index) {
+                    if (index < 0 || index >= 7) return;
+                    auto& settings = hyprv::app::settings::Settings::Instance();
+                    settings.SetReleaseShortcut((settings.ReleaseShortcut() & 0xFF00u) | (index + 1));
+                });
+            addRow(generalIdx, mods, L"release focus keyboard shortcut ctrl alt shift escape guest");
+            std::vector<std::wstring> labels{ L"None (modifiers only)" };
+            std::vector<uint32_t> keys{ 0 };
+            for (uint32_t i = 0; i < 12; ++i)
+            {
+                labels.push_back(L"F" + std::to_wstring(i + 1));
+                keys.push_back(VK_F1 + i);
+            }
+            labels.push_back(L"Pause"); keys.push_back(VK_PAUSE);
+            labels.push_back(L"Scroll Lock"); keys.push_back(VK_SCROLL);
+            labels.push_back(L"Escape"); keys.push_back(VK_ESCAPE);
+            for (uint32_t key = 'A'; key <= 'Z'; ++key)
+            {
+                labels.push_back(std::wstring(1, static_cast<wchar_t>(key)));
+                keys.push_back(key);
+            }
+            int selected = 0;
+            for (size_t i = 0; i < keys.size(); ++i)
+                if (keys[i] == (shortcut >> 8)) selected = static_cast<int>(i);
+            auto keyRow = MakeComboRow(L"Release session focus — key", L"Default: Ctrl+Alt+Shift with no additional key.",
+                labels, selected, [keys](int index) {
+                    if (index < 0 || static_cast<size_t>(index) >= keys.size()) return;
+                    auto& settings = hyprv::app::settings::Settings::Instance();
+                    settings.SetReleaseShortcut((settings.ReleaseShortcut() & 7u) | (keys[index] << 8));
+                });
+            addRow(generalIdx, keyRow, L"release focus keyboard shortcut key function escape guest");
+        }
+
         // ---- APPEARANCE ----
         size_t appearanceIdx = addSection(L"APPEARANCE");
         {

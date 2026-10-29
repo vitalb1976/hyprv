@@ -26,10 +26,13 @@ namespace hyprv::ipc
     // v3: RdpOptions gained `userByteLen` + a trailing UTF-8 username (after the
     //     server/domain bytes) so generic RDP connections (Remote Hosts) can
     //     pre-fill mstscax's credential prompt with the saved user name.
-    inline constexpr uint8_t kProtocolVersion = 3;
+    // v4: configurable release-focus shortcut command + notification.
+    inline constexpr uint8_t kProtocolVersion = 4;
 
     // The parent uses this; the child opens \\.\pipe\hyprv-rdp-<guid> as client.
     inline constexpr wchar_t kPipeNamePrefix[] = L"\\\\.\\pipe\\hyprv-rdp-";
+
+    inline constexpr uint32_t kReleaseFocusWindowMessage = 0x8000 + 0x351;
 
     // 64 KiB is large enough to hold any plausible TypeText message inline.
     inline constexpr uint32_t kPipeBufferSize = 64 * 1024;
@@ -48,6 +51,7 @@ namespace hyprv::ipc
         SetEnhanced                  = 8,  // toggle enhanced mode without losing tab
         SendCtrlAltDel               = 9,
         TypeText                     = 10,
+        SetReleaseShortcut           = 11, // uint32: modifiers low byte, virtual key next byte
     };
 
     // Child -> Parent notifications. Values 128..255 so a printed dump can see direction at a glance.
@@ -62,6 +66,7 @@ namespace hyprv::ipc
         DesktopResized = 134,  // ActiveX reported a new remote desktop size
         Error          = 135,
         MouseActivated = 136,
+        ReleaseFocus   = 138, // no payload; shortcut released in foreground session
         LogLine        = 137,  // diagnostic text — payload is `LogLine` header + UTF-8 bytes
     };
 

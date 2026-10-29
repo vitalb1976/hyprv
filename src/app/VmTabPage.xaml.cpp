@@ -1036,6 +1036,12 @@ namespace winrt::hyprv_app::implementation
         auto queue   = m_uiQueue;
         auto weakSelf = get_weak();
 
+        m_client->OnReleaseFocus = [queue, weakSelf] {
+            queue.TryEnqueue([weakSelf] {
+                if (auto self = weakSelf.get(); self && self->m_client)
+                    self->m_client->ReleaseFocus();
+            });
+        };
         m_client->OnConnecting = [queue, weakSelf]
         {
             HyprvAppLog(L"[cb] OnConnecting (rx thread); enqueueing");
