@@ -513,7 +513,7 @@ namespace hyprv::app::settings
             // Clamp to a sensible range so a hand-edited file can't
             // produce a 0-sized or absurdly large initial popup. Upper
             // bound matches what most modern monitors can fit.
-            if (v < 320) v = 320;
+            if (v != 0 && v < 320) v = 320;
             if (v > 7680) v = 7680;
             out.initialDesktopWidth = static_cast<uint16_t>(v);
         }
@@ -521,7 +521,7 @@ namespace hyprv::app::settings
         {
             double v = obj.GetNamedNumber(L"initialDesktopHeight",
                 static_cast<double>(out.initialDesktopHeight));
-            if (v < 240) v = 240;
+            if (v != 0 && v < 240) v = 240;
             if (v > 4320) v = 4320;
             out.initialDesktopHeight = static_cast<uint16_t>(v);
         }

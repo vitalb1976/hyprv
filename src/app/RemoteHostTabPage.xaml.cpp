@@ -389,8 +389,10 @@ namespace winrt::hyprv_app::implementation
         // initial size if the Border isn't measured yet.
         int sx = 0, sy = 0, bw = 0, bh = 0;
         const bool borderValid = ComputeBorderScreenRect(sx, sy, bw, bh);
-        int dw = (borderValid && bw > 0) ? bw : host.rdp.initialDesktopWidth;
-        int dh = (borderValid && bh > 0) ? bh : host.rdp.initialDesktopHeight;
+        int dw = host.rdp.initialDesktopWidth;
+        if (dw == 0 && borderValid && bw > 0) dw = bw;
+        int dh = host.rdp.initialDesktopHeight;
+        if (dh == 0 && borderValid && bh > 0) dh = bh;
         if (dw <= 0) dw = 1024;
         if (dh <= 0) dh = 768;
         if (dw > 65535) dw = 65535;

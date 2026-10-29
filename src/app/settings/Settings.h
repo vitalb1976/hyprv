@@ -210,8 +210,9 @@ namespace hyprv::app::settings
         // Kept here anyway so users with basic-only guests can get a
         // sensible starting resolution. 16/24/32 bpp; 32 is the modern
         // default (mstscax falls back gracefully if the guest can't).
-        uint16_t initialDesktopWidth  = 1024;
-        uint16_t initialDesktopHeight = 768;
+        // Zero dimensions select Fit to Window; resolved before sending IPC.
+        uint16_t initialDesktopWidth  = 0;
+        uint16_t initialDesktopHeight = 0;
         uint16_t colorDepth           = 32;
         // Display scale override (as a percent: 100/125/150/175/200). 0 means
         // "Auto" — follow the host window's DPI (the historical behavior). A

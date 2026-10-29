@@ -946,6 +946,7 @@
                                       FontSize="12" MinHeight="28" Width="180"
                                       HorizontalAlignment="Left"
                                       ToolTipService.ToolTip="Applies to basic-session guests; enhanced sessions fit the tab window.">
+                                <ComboBoxItem Content="Fit to Window" />
                                 <ComboBoxItem Content="800 x 600" />
                                 <ComboBoxItem Content="1024 x 768" />
                                 <ComboBoxItem Content="1280 x 720" />

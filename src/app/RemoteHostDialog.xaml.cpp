@@ -144,8 +144,8 @@ namespace winrt::hyprv_app::implementation
     {
         constexpr uint16_t kColorDepths[] = { 16, 24, 32 };
         constexpr uint16_t kScales[]      = { 0, 100, 125, 150, 175, 200 };
-        constexpr uint16_t kResW[] = { 800, 1024, 1280, 1280, 1366, 1600, 1920, 2560 };
-        constexpr uint16_t kResH[] = { 600,  768,  720, 1024,  768,  900, 1080, 1440 };
+        constexpr uint16_t kResW[] = { 0, 800, 1024, 1280, 1280, 1366, 1600, 1920, 2560 };
+        constexpr uint16_t kResH[] = { 0, 600,  768,  720, 1024,  768,  900, 1080, 1440 };
     }
 
     void RemoteHostDialog::LoadRdpControls(hyprv::app::settings::RdpOptions const& o)
@@ -166,8 +166,8 @@ namespace winrt::hyprv_app::implementation
         }
         if (auto c = rdpSizeCombo())
         {
-            int idx = 1;   // default 1024 x 768
-            for (int i = 0; i < 8; ++i)
+            int idx = 0;   // default Fit to Window
+            for (int i = 0; i < 9; ++i)
                 if (kResW[i] == o.initialDesktopWidth && kResH[i] == o.initialDesktopHeight)
                     { idx = i; break; }
             c.SelectedIndex(idx);
@@ -208,7 +208,7 @@ namespace winrt::hyprv_app::implementation
         if (auto c = rdpSizeCombo())
         {
             int i = c.SelectedIndex();
-            if (i >= 0 && i < 8)
+            if (i >= 0 && i < 9)
             {
                 o.initialDesktopWidth  = kResW[i];
                 o.initialDesktopHeight = kResH[i];

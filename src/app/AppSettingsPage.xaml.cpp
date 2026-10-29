@@ -749,23 +749,23 @@ namespace winrt::hyprv_app::implementation
             // Initial size — starting resolution for BASIC sessions only
             // (enhanced sessions resize to fit the tab window). Preset list;
             // an odd hand-edited size falls back to the 1024x768 selection.
-            constexpr uint16_t kResW[] = { 800, 1024, 1280, 1280, 1366, 1600, 1920, 2560 };
-            constexpr uint16_t kResH[] = { 600,  768,  720, 1024,  768,  900, 1080, 1440 };
-            int resIdx = 1; // default 1024x768
-            for (int i = 0; i < 8; ++i)
+            constexpr uint16_t kResW[] = { 0, 800, 1024, 1280, 1280, 1366, 1600, 1920, 2560 };
+            constexpr uint16_t kResH[] = { 0, 600,  768,  720, 1024,  768,  900, 1080, 1440 };
+            int resIdx = 0; // default Fit to Window
+            for (int i = 0; i < 9; ++i)
                 if (kResW[i] == rdp.initialDesktopWidth &&
                     kResH[i] == rdp.initialDesktopHeight) resIdx = i;
             auto resRow = MakeComboRow(
                 L"Initial size (basic sessions)",
-                L"Starting resolution for basic-session guests. Enhanced sessions fit the window.",
-                { L"800 x 600", L"1024 x 768", L"1280 x 720",
+                L"Fit to Window uses the current content area when connecting. Enhanced sessions also resize dynamically.",
+                { L"Fit to Window", L"800 x 600", L"1024 x 768", L"1280 x 720",
                   L"1280 x 1024", L"1366 x 768", L"1600 x 900",
                   L"1920 x 1080", L"2560 x 1440" },
                 resIdx,
                 [](int idx) {
-                    constexpr uint16_t w[] = { 800, 1024, 1280, 1280, 1366, 1600, 1920, 2560 };
-                    constexpr uint16_t h[] = { 600,  768,  720, 1024,  768,  900, 1080, 1440 };
-                    if (idx < 0 || idx > 7) return;
+                    constexpr uint16_t w[] = { 0, 800, 1024, 1280, 1280, 1366, 1600, 1920, 2560 };
+                    constexpr uint16_t h[] = { 0, 600,  768,  720, 1024,  768,  900, 1080, 1440 };
+                    if (idx < 0 || idx > 8) return;
                     auto& ss = hyprv::app::settings::Settings::Instance();
                     auto r = ss.RdpDefaults();
                     r.initialDesktopWidth  = w[idx];

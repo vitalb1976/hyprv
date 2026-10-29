@@ -162,7 +162,8 @@
                                    Style="{StaticResource FieldLabel}" />
                         <ComboBox Grid.Row="3" Grid.Column="1" x:Name="rdpSizeCombo"
                                   FontSize="12" MinHeight="28" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="800 x 600" />
+                            <ComboBoxItem Content="Fit to Window" />
+                                <ComboBoxItem Content="800 x 600" />
                             <ComboBoxItem Content="1024 x 768" />
                             <ComboBoxItem Content="1280 x 720" />
                             <ComboBoxItem Content="1280 x 1024" />

@@ -226,13 +226,13 @@ namespace
     // RDP "Initial size" presets - index to (width, height). Shared by the
     // load (select the matching item) and the Save diff (read the pick). Must
     // stay in lock-step with the rdpResolutionCombo items in the XAML.
-    constexpr uint16_t kRdpResW[] = { 800, 1024, 1280, 1280, 1366, 1600, 1920, 2560 };
-    constexpr uint16_t kRdpResH[] = { 600,  768,  720, 1024,  768,  900, 1080, 1440 };
+    constexpr uint16_t kRdpResW[] = { 0, 800, 1024, 1280, 1280, 1366, 1600, 1920, 2560 };
+    constexpr uint16_t kRdpResH[] = { 0, 600,  768,  720, 1024,  768,  900, 1080, 1440 };
     int RdpResolutionIndex(uint16_t w, uint16_t h)
     {
         for (int i = 0; i < static_cast<int>(std::size(kRdpResW)); ++i)
             if (kRdpResW[i] == w && kRdpResH[i] == h) return i;
-        return 1;  // default 1024x768
+        return 0;  // default Fit to Window
     }
     // Display-scale combo index (0 = Auto) to percent. Lock-step with the
     // rdpScaleCombo items in the XAML.
@@ -1393,7 +1393,7 @@ namespace winrt::hyprv_app::implementation
             }
             c.SelectedIndex(sidx);
         }
-        // Initial size — preset list; unmatched (hand-edited) → 1024x768.
+        // Initial size — preset list; unmatched (hand-edited) → Fit to Window.
         if (auto c = rdpResolutionCombo())
             c.SelectedIndex(RdpResolutionIndex(
                 m_origRdpOptions.initialDesktopWidth,

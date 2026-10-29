@@ -1393,8 +1393,8 @@ namespace winrt::hyprv_app::implementation
         // still uses m_sessionW/H = 1024×768 as the *initial* container —
         // mstscax adjusts on first DesktopResized callback. Wire what the
         // user picked anyway so basic-only guests honor it.
-        opts.desktopWidth  = userOpts.initialDesktopWidth;
-        opts.desktopHeight = userOpts.initialDesktopHeight;
+        opts.desktopWidth  = userOpts.initialDesktopWidth ? userOpts.initialDesktopWidth : 1024;
+        opts.desktopHeight = userOpts.initialDesktopHeight ? userOpts.initialDesktopHeight : 768;
         opts.colorDepth    = userOpts.colorDepth;
         // Map user redirection flags into the wire bitmask. Enhanced-
         // session bit is computed above from VM availability + user
@@ -1465,7 +1465,7 @@ namespace winrt::hyprv_app::implementation
         // keep the old scaled-1024×768 placeholder so the guest's logon UI
         // still centers in a sane logical desktop (gotcha #49); the retry +
         // OnRdpHostSizeChanged expand it once the Border resolves.
-        if (wantEnhanced)
+        if (wantEnhanced || (userOpts.initialDesktopWidth == 0 && userOpts.initialDesktopHeight == 0))
         {
             if (borderValid)
             {
