@@ -71,7 +71,7 @@ namespace hyprv::app::vm
         // VMManager hasn't polled yet" from "VM not in cache because it was
         // deleted." A bare GetByGuid returning nullopt is ambiguous between
         // those two during cold start.
-        bool HasFirstSnapshot() const { return m_pollGen.load() > 0; }
+        bool HasFirstSnapshot() const { return m_inventoryReady.load() || m_pollGen.load() > 0; }
 
         using OnChangedFn = std::function<void()>;
         using SubToken    = uint64_t;
@@ -1000,6 +1000,8 @@ namespace hyprv::app::vm
         // Incremented at the end of every poll iteration. HasFirstSnapshot()
         // uses it; KickPollAndWait uses the request handshake below instead.
         std::atomic<uint64_t>          m_pollGen{ 0 };
+        // A lightweight startup inventory can precede the first detailed poll.
+        std::atomic<bool>              m_inventoryReady{ false };
         // Request/serviced handshake for KickPollAndWait. KickPollAndWait
         // increments m_pollReq; each poll cycle snapshots m_pollReq at its
         // START and publishes that value to m_pollServiced when it finishes.

@@ -5708,6 +5708,46 @@ namespace hyprv::app::vm
         {
             scope = std::make_unique<hyprv::wmi::WmiScope>(
                 L"root\\virtualization\\v2");
+            // Publish the VM list before opening performance counters or
+            // collecting the many settings/resource tables in UpdateAll.
+            // This is a real inventory (including the empty-host case), not
+            // cached names from a previous run. Detailed fields arrive below.
+            const auto inventoryStart = std::chrono::steady_clock::now();
+            try
+            {
+                auto rows = scope->Query(
+                    L"SELECT Name, ElementName, EnabledState, EnhancedSessionModeState "
+                    L"FROM Msvm_ComputerSystem WHERE Caption='Virtual Machine'");
+                std::vector<VirtualMachine> inventory;
+                inventory.reserve(rows.size());
+                for (auto& row : rows)
+                {
+                    VirtualMachine vm;
+                    vm.guid = row.GetString(L"Name").value_or(L"");
+                    if (vm.guid.empty()) continue;
+                    vm.elementName = row.GetString(L"ElementName").value_or(L"");
+                    vm.state = static_cast<VmState>(row.GetUInt16(L"EnabledState").value_or(0));
+                    vm.enhancedSessionAvailable =
+                        row.GetUInt16(L"EnhancedSessionModeState").value_or(0) == 2;
+                    inventory.push_back(std::move(vm));
+                }
+                const auto count = inventory.size();
+                {
+                    std::lock_guard<std::mutex> lk(m_lock);
+                    m_vms = std::move(inventory);
+                }
+                m_inventoryReady.store(true);
+                NotifyChanged();
+                HyprvAppLog(L"[vmm] startup inventory: %zu VMs in %lld ms",
+                    count, static_cast<long long>(std::chrono::duration_cast<
+                        std::chrono::milliseconds>(std::chrono::steady_clock::now()
+                            - inventoryStart).count()));
+            }
+            catch (hyprv::wmi::WmiException const& e)
+            {
+                // Retain the existing full-refresh fallback on inventory failure.
+                HyprvAppLog(L"[vmm] startup inventory failed: %s", e.whatW.c_str());
+            }
             vsms = hyprv::wmi::hyperv::Msvm_VirtualSystemManagementService(
                 scope->GetInstance(L"Msvm_VirtualSystemManagementService"));
             if (!vsms)
