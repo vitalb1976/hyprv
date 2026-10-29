@@ -179,6 +179,12 @@ namespace winrt::hyprv_app::implementation
         // by the edit dialog after a Save that changed connection settings.
         void ReconnectRemoteHostTab(std::wstring const& address);
 
+        // Add a session-only action to a left-list context menu. Resolve the
+        // current tab on opening/click, since list items outlive their tabs.
+        void AddListDisconnect(Microsoft::UI::Xaml::Controls::MenuFlyout const& menu,
+                               hstring const& key, bool remoteHost);
+
+
         // Close (and tear down) a tab. Encapsulates the per-tab-type
         // teardown so OnTabCloseRequested and WelcomePage's replace-on-
         // open gesture share one path. Idempotent — no-op if the item

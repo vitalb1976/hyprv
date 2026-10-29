@@ -322,6 +322,9 @@ namespace
         lvi.ContextFlyout(hyprv::app::ui::BuildVmContextMenu(
             winrt::hstring{ vm.guid }, winrt::hstring{ vm.elementName },
             weakWindow));
+        if (auto win = weakWindow.get())
+            win->AddListDisconnect(lvi.ContextFlyout().as<MenuFlyout>(),
+                                   winrt::hstring{ vm.guid }, false);
 
         // Double-click → open or focus the tab. Single click stays as
         // selection only (drives SyncRailSelectionToActive / future flyout
@@ -1557,6 +1560,66 @@ namespace winrt::hyprv_app::implementation
         menu.Items().Append(disconnect);
     }
 
+    void MainWindow::AddListDisconnect(
+        Microsoft::UI::Xaml::Controls::MenuFlyout const& menu,
+        hstring const& key, bool remoteHost)
+    {
+        using namespace Microsoft::UI::Xaml::Controls;
+        auto weakWindow = get_weak();
+        auto findTab = [weakWindow, key, remoteHost]() -> TabViewItem {
+            auto self = weakWindow.get();
+            if (!self) return nullptr;
+            auto tv = self->tabView();
+            if (!tv) return nullptr;
+            for (uint32_t i = 0; i < tv.TabItems().Size(); ++i)
+            {
+                auto tab = tv.TabItems().GetAt(i).try_as<TabViewItem>();
+                if (!tab) continue;
+                if (remoteHost)
+                {
+                    auto remotePage = tab.Tag().try_as<winrt::hyprv_app::RemoteHostTabPage>();
+                    if (remotePage && _wcsicmp(remotePage.HostAddress().c_str(), key.c_str()) == 0)
+                        return tab;
+                }
+                else
+                {
+                    auto vmPage = tab.Tag().try_as<winrt::hyprv_app::VmTabPage>();
+                    if (vmPage && _wcsicmp(vmPage.VmGuid().c_str(), key.c_str()) == 0)
+                        return tab;
+                }
+            }
+            return nullptr;
+        };
+
+        MenuFlyoutItem disconnect;
+        disconnect.Text(L"Disconnect");
+        disconnect.FontSize(12);
+        disconnect.MinHeight(28);
+        disconnect.Padding({ 4, 2, 8, 2 });
+        disconnect.IsEnabled(false);
+        FontIcon icon;
+        icon.FontFamily(Microsoft::UI::Xaml::Media::FontFamily{ L"Segoe MDL2 Assets" });
+        icon.Glyph(L"\xE8CD");
+        icon.FontSize(12);
+        disconnect.Icon(icon);
+        disconnect.Click([findTab](auto const&, auto const&) {
+            if (auto tab = findTab())
+            {
+                if (auto vmPage = tab.Tag().try_as<winrt::hyprv_app::VmTabPage>())
+                    winrt::get_self<implementation::VmTabPage>(vmPage)->Disconnect();
+                else if (auto remotePage = tab.Tag().try_as<winrt::hyprv_app::RemoteHostTabPage>())
+                    winrt::get_self<implementation::RemoteHostTabPage>(remotePage)->Disconnect();
+            }
+        });
+        auto weakDisconnect = winrt::make_weak(disconnect);
+        menu.Opening([findTab, weakDisconnect](auto const&, auto const&) {
+            if (auto menuItem = weakDisconnect.get())
+                menuItem.IsEnabled(findTab() != nullptr);
+        });
+        menu.Items().Append(MenuFlyoutSeparator{});
+        menu.Items().Append(disconnect);
+    }
+
     void MainWindow::ShutdownAllTabClients()
     {
         auto tv = tabView();
@@ -2103,6 +2166,8 @@ namespace winrt::hyprv_app::implementation
             lvi.MinHeight(26);
             lvi.HorizontalContentAlignment(HorizontalAlignment::Stretch);
             lvi.ContextFlyout(hyprv::app::ui::BuildRemoteHostContextMenu(addrH, weakWindow));
+            if (auto win = weakWindow.get())
+                win->AddListDisconnect(lvi.ContextFlyout().as<MenuFlyout>(), addrH, true);
             lvi.DoubleTapped([addrH, weakWindow](
                 winrt::Windows::Foundation::IInspectable const&,
                 Input::DoubleTappedRoutedEventArgs const& e)
