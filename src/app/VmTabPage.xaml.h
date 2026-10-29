@@ -80,6 +80,7 @@ namespace winrt::hyprv_app::implementation
         // RemoveAt, delaying ~VmTabPage indefinitely — leaving rdphost.exe
         // orphaned until process exit. Idempotent.
         void ShutdownClient();
+        void Disconnect();
 
         // XAML event — Start button inside the placeholder overlay.
         void OnPlaceholderStartClick(Windows::Foundation::IInspectable const&,
@@ -129,6 +130,7 @@ namespace winrt::hyprv_app::implementation
         // enhanced once it's available again.
         void ScheduleReconnect(std::chrono::milliseconds delay);
         void DoReconnect();
+        bool m_manualDisconnect = false;
 
         // Surface a fatal connect failure in the placeholder overlay: stops the
         // silent reconnect churn, latches m_hadConnectError, stashes the

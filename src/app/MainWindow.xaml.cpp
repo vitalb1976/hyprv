@@ -1180,6 +1180,7 @@ namespace winrt::hyprv_app::implementation
         // checkpoint / etc). Same flyout the rail uses. Don't attach on the
         // rdpHost area — right-clicks there must reach the guest.
         item.ContextFlyout(hyprv::app::ui::BuildVmContextMenu(vmGuid, displayName, get_weak()));
+        AddTabDisconnect(item);
 
         pageImpl->SetTabItem(item);
 
@@ -1466,6 +1467,7 @@ namespace winrt::hyprv_app::implementation
             std::wstring name = vmOpt ? vmOpt->elementName : std::wstring{};
             item.ContextFlyout(hyprv::app::ui::BuildVmContextMenu(
                 winrt::hstring{ guid }, winrt::hstring{ name }, get_weak()));
+            AddTabDisconnect(item);
         }
         else if (auto rh = tag.try_as<winrt::hyprv_app::RemoteHostTabPage>())
         {
@@ -1474,6 +1476,7 @@ namespace winrt::hyprv_app::implementation
             impl->SetTabItem(item);
             item.ContextFlyout(hyprv::app::ui::BuildRemoteHostContextMenu(
                 rh.HostAddress(), get_weak()));
+            AddTabDisconnect(item);
         }
         else if (auto wp = tag.try_as<winrt::hyprv_app::WelcomePage>())
         {
@@ -1509,6 +1512,35 @@ namespace winrt::hyprv_app::implementation
             tv.SelectedItem(item);
         PersistOpenTabs();   // primary-only (secondary no-ops)
         HyprvAppLog(L"[tear] AdoptMovedTab into hwnd=%p", m_windowHwnd);
+    }
+
+    void MainWindow::AddTabDisconnect(
+        Microsoft::UI::Xaml::Controls::TabViewItem const& item)
+    {
+        using namespace Microsoft::UI::Xaml::Controls;
+        auto menu = item.ContextFlyout().try_as<MenuFlyout>();
+        if (!menu) return;
+        auto vm = item.Tag().try_as<winrt::hyprv_app::VmTabPage>();
+        auto remote = item.Tag().try_as<winrt::hyprv_app::RemoteHostTabPage>();
+        if (!vm && !remote) return;
+        MenuFlyoutItem disconnect;
+        disconnect.Text(L"Disconnect");
+        FontIcon disconnectIcon;
+        disconnectIcon.FontFamily(Microsoft::UI::Xaml::Media::FontFamily{ L"Segoe MDL2 Assets" });
+        disconnectIcon.Glyph(L"\xE8CD"); // DisconnectDrive
+        disconnect.Icon(disconnectIcon);
+        auto weakItem = winrt::make_weak(item);
+        disconnect.Click([weakItem](auto const&, auto const&) {
+            if (auto tab = weakItem.get())
+            {
+                if (auto vmPage = tab.Tag().try_as<winrt::hyprv_app::VmTabPage>())
+                    winrt::get_self<implementation::VmTabPage>(vmPage)->Disconnect();
+                else if (auto remotePage = tab.Tag().try_as<winrt::hyprv_app::RemoteHostTabPage>())
+                    winrt::get_self<implementation::RemoteHostTabPage>(remotePage)->Disconnect();
+            }
+        });
+        menu.Items().Append(MenuFlyoutSeparator{});
+        menu.Items().Append(disconnect);
     }
 
     void MainWindow::ShutdownAllTabClients()
@@ -1899,6 +1931,7 @@ namespace winrt::hyprv_app::implementation
         item.IconSource(icon);
         item.Tag(page);
         item.ContextFlyout(hyprv::app::ui::BuildRemoteHostContextMenu(address, get_weak()));
+        AddTabDisconnect(item);
 
         pageImpl->SetTabItem(item);
 
@@ -2460,6 +2493,7 @@ namespace winrt::hyprv_app::implementation
                         winrt::hstring{ guid },
                         winrt::hstring{ name },
                         get_weak()));
+                    AddTabDisconnect(item);
                 }
                 else if (auto wp = item.Tag().try_as<winrt::hyprv_app::WelcomePage>())
                 {

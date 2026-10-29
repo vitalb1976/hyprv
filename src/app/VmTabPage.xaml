@@ -112,7 +112,7 @@
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <FontIcon FontFamily="Segoe MDL2 Assets"
                                   Glyph="&#xE72C;" FontSize="14" />
-                        <TextBlock Text="Retry" />
+                        <TextBlock x:Name="placeholderRetryLabel" Text="Retry" />
                     </StackPanel>
                 </Button>
             </StackPanel>

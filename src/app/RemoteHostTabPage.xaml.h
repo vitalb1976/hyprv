@@ -52,6 +52,7 @@ namespace winrt::hyprv_app::implementation
         // Deterministic teardown of the rdphost child + IPC pipe. MainWindow
         // calls this from OnTabCloseRequested before removing the TabViewItem.
         void ShutdownClient();
+        void Disconnect();
 
         // Apply changed per-host settings (RDP options / credentials) to a LIVE
         // session by respawning the rdphost child — StartConnection re-resolves

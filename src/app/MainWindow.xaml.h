@@ -344,6 +344,7 @@ namespace winrt::hyprv_app::implementation
         // handler — a secondary window's close doesn't exit the process, so the
         // job-object reap won't fire and the children must be stopped explicitly.
         void ShutdownAllTabClients();
+        void AddTabDisconnect(Microsoft::UI::Xaml::Controls::TabViewItem const& item);
 
         // Move a dragged tab into THIS window's strip at `index` (-1 = append) —
         // detaches it from its source window + re-wires. No-op if it's already

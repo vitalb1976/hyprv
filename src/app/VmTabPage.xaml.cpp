@@ -219,6 +219,7 @@ namespace winrt::hyprv_app::implementation
         // propagate, then re-evaluate the placeholder / client lifecycle —
         // running ↔ not-running transitions spawn or tear down rdphost.
         UpdateVmTabHeader();
+        if (m_manualDisconnect) { UpdatePlaceholderAndClient(); return; }
 
         // Live upgrade basic -> enhanced. If we're connected in a BASIC session
         // (m_wantedEnhanced false) but the user wants enhanced and it's now
@@ -357,6 +358,7 @@ namespace winrt::hyprv_app::implementation
 
     void VmTabPage::DoReconnect()
     {
+        if (m_manualDisconnect) return;
         // Only reconnect a Running VM. If it left Running while the timer was
         // pending (it was actually shutting down, not rebooting), just let
         // UpdatePlaceholderAndClient surface the right placeholder.
@@ -464,6 +466,7 @@ namespace winrt::hyprv_app::implementation
         winrt::Windows::Foundation::IInspectable const&,
         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&)
     {
+        m_manualDisconnect = false;
         HyprvAppLog(L"[tab] placeholder Retry clicked vm=%s", m_vmGuid.c_str());
         // Clear the error latch + tally and force a fresh spawn. The prior
         // (dead) client was already torn down in ShowConnectError. If the VM is
@@ -528,6 +531,7 @@ namespace winrt::hyprv_app::implementation
         if (auto sp = placeholderSpinner()) sp.Visibility(Visibility::Collapsed);
         placeholderVmName().Text(winrt::hstring{ vmName });
         placeholderState().Text(winrt::hstring{ L"Connection failed" });
+        if (placeholderRetryLabel()) placeholderRetryLabel().Text(m_manualDisconnect ? L"Reconnect" : L"Retry");
         if (auto b = BrushFromTheme(L"SystemFillColorCriticalBrush"))
             placeholderState().Foreground(b);
         if (m_lastErrorText.empty())
@@ -649,6 +653,15 @@ namespace winrt::hyprv_app::implementation
             return;
         }
 
+        if (m_manualDisconnect)
+        {
+            RenderErrorPlaceholder(vmOpt->elementName);
+            placeholderState().Text(L"Disconnected");
+            if (auto brush = BrushFromTheme(L"TextFillColorSecondaryBrush"))
+                placeholderState().Foreground(brush);
+            placeholderHint().Visibility(Microsoft::UI::Xaml::Visibility::Collapsed);
+            return;
+        }
         auto const& vm = *vmOpt;
         std::wstring displayName = vm.elementName.empty()
             ? std::wstring{ L"(no name)" }
@@ -787,6 +800,16 @@ namespace winrt::hyprv_app::implementation
             : std::wstring{};
         showPlaceholder(displayName, stateLine, hint, showStart);
         m_lastState = vm.state;
+    }
+
+    void VmTabPage::Disconnect()
+    {
+        m_manualDisconnect = true;
+        m_pendingConnect = false;
+        m_startRequested = false;
+        if (m_reconnectTimer) m_reconnectTimer.Stop();
+        TearDownClient();
+        UpdatePlaceholderAndClient();
     }
 
     void VmTabPage::ShutdownClient()
@@ -969,6 +992,7 @@ namespace winrt::hyprv_app::implementation
 
     void VmTabPage::StartConnection()
     {
+        if (m_manualDisconnect) return;
         // Idempotent: if an rdphost child is already attached (e.g. caller
         // is UpdatePlaceholderAndClient firing on a poll that already saw
         // Running), don't double-spawn. The previous client persists.
@@ -1393,8 +1417,8 @@ namespace winrt::hyprv_app::implementation
         // still uses m_sessionW/H = 1024×768 as the *initial* container —
         // mstscax adjusts on first DesktopResized callback. Wire what the
         // user picked anyway so basic-only guests honor it.
-        opts.desktopWidth  = userOpts.initialDesktopWidth ? userOpts.initialDesktopWidth : 1024;
-        opts.desktopHeight = userOpts.initialDesktopHeight ? userOpts.initialDesktopHeight : 768;
+        opts.desktopWidth  = userOpts.initialDesktopWidth;
+        opts.desktopHeight = userOpts.initialDesktopHeight;
         opts.colorDepth    = userOpts.colorDepth;
         // Map user redirection flags into the wire bitmask. Enhanced-
         // session bit is computed above from VM availability + user
@@ -1465,7 +1489,7 @@ namespace winrt::hyprv_app::implementation
         // keep the old scaled-1024×768 placeholder so the guest's logon UI
         // still centers in a sane logical desktop (gotcha #49); the retry +
         // OnRdpHostSizeChanged expand it once the Border resolves.
-        if (wantEnhanced || (userOpts.initialDesktopWidth == 0 && userOpts.initialDesktopHeight == 0))
+        if (wantEnhanced)
         {
             if (borderValid)
             {
