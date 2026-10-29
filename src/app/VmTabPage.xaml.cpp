@@ -802,6 +802,14 @@ namespace winrt::hyprv_app::implementation
         m_lastState = vm.state;
     }
 
+    void VmTabPage::ReconnectIfDisconnected()
+    {
+        // A first tap may have just started loading/connecting this page.
+        // Keep a live session or in-flight attempt intact on the second tap.
+        if (m_connected || m_client || !m_loaded) return;
+        OnPlaceholderRetryClick(nullptr, nullptr);
+    }
+
     void VmTabPage::Disconnect()
     {
         m_manualDisconnect = true;

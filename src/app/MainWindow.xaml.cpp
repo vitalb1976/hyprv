@@ -326,29 +326,16 @@ namespace
             win->AddListDisconnect(lvi.ContextFlyout().as<MenuFlyout>(),
                                    winrt::hstring{ vm.guid }, false);
 
-        // Double-click → open or focus the tab. Single click stays as
-        // selection only (drives SyncRailSelectionToActive / future flyout
-        // wiring) to avoid accidental tab opens when navigating the rail.
+        // Mouse gestures activate tabs; programmatic rail selection only
+        // updates the highlight and must not open or reconnect anything.
         winrt::hstring guidH{ vm.guid };
-        lvi.DoubleTapped([guidH, weakWindow](
-            winrt::Windows::Foundation::IInspectable const&,
-            Microsoft::UI::Xaml::Input::DoubleTappedRoutedEventArgs const& e)
-        {
+        lvi.Tapped([guidH, weakWindow](auto const&, Input::TappedRoutedEventArgs const& e) {
             e.Handled(true);
-            auto win = weakWindow.get();
-            if (!win) return;
-            // Resolve the display name fresh — VMManager may have learned
-            // the elementName since this rail item was created (cold-start race).
-            std::wstring display;
-            if (auto vmOpt = hyprv::app::vm::VMManager::Instance().GetByGuid(
-                    std::wstring{ guidH }))
-            {
-                display = vmOpt->elementName;
-            }
-            if (display.empty()) display = std::wstring{ guidH };
-            HyprvAppLog(L"[ui] rail VM double-clicked guid=%s display=%s",
-                std::wstring{ guidH }.c_str(), display.c_str());
-            win->OpenVmTab(guidH, winrt::hstring{ display });
+            if (auto win = weakWindow.get()) win->ActivateListEntry(guidH, false, false);
+        });
+        lvi.DoubleTapped([guidH, weakWindow](auto const&, Input::DoubleTappedRoutedEventArgs const& e) {
+            e.Handled(true);
+            if (auto win = weakWindow.get()) win->ActivateListEntry(guidH, false, true);
         });
 
         winrt::hstring tooltip;
@@ -1560,6 +1547,25 @@ namespace winrt::hyprv_app::implementation
         menu.Items().Append(disconnect);
     }
 
+    void MainWindow::ActivateListEntry(hstring const& key, bool remoteHost, bool reconnect)
+    {
+        if (remoteHost)
+        {
+            if (auto remotePage = OpenRemoteHostTab(key))
+                if (reconnect)
+                    winrt::get_self<implementation::RemoteHostTabPage>(remotePage)->ReconnectIfDisconnected();
+        }
+        else
+        {
+            std::wstring display{ key };
+            if (auto vm = hyprv::app::vm::VMManager::Instance().GetByGuid(std::wstring{ key }))
+                if (!vm->elementName.empty()) display = vm->elementName;
+            if (auto vmPage = OpenVmTab(key, winrt::hstring{ display }))
+                if (reconnect)
+                    winrt::get_self<implementation::VmTabPage>(vmPage)->ReconnectIfDisconnected();
+        }
+    }
+
     void MainWindow::AddListDisconnect(
         Microsoft::UI::Xaml::Controls::MenuFlyout const& menu,
         hstring const& key, bool remoteHost)
@@ -2156,7 +2162,7 @@ namespace winrt::hyprv_app::implementation
             row.Children().Append(tb);
 
             // ListViewItem (not a Border) so single-click selection uses the
-            // SAME native highlight as the VM rail. DOUBLE click connects; the
+            // SAME native highlight as the VM rail. Mouse gestures below activate; the
             // ListView's own selection handles the highlight on single click.
             // Mirrors CreateRailItem (the VM rail item builder).
             ListViewItem lvi;
@@ -2168,12 +2174,13 @@ namespace winrt::hyprv_app::implementation
             lvi.ContextFlyout(hyprv::app::ui::BuildRemoteHostContextMenu(addrH, weakWindow));
             if (auto win = weakWindow.get())
                 win->AddListDisconnect(lvi.ContextFlyout().as<MenuFlyout>(), addrH, true);
-            lvi.DoubleTapped([addrH, weakWindow](
-                winrt::Windows::Foundation::IInspectable const&,
-                Input::DoubleTappedRoutedEventArgs const& e)
-            {
+            lvi.Tapped([addrH, weakWindow](auto const&, Input::TappedRoutedEventArgs const& e) {
                 e.Handled(true);
-                if (auto win = weakWindow.get()) win->OpenRemoteHostTab(addrH);
+                if (auto win = weakWindow.get()) win->ActivateListEntry(addrH, true, false);
+            });
+            lvi.DoubleTapped([addrH, weakWindow](auto const&, Input::DoubleTappedRoutedEventArgs const& e) {
+                e.Handled(true);
+                if (auto win = weakWindow.get()) win->ActivateListEntry(addrH, true, true);
             });
             ToolTipService::SetToolTip(lvi, winrt::box_value(addrH));
             list.Items().Append(lvi);
@@ -2594,10 +2601,8 @@ namespace winrt::hyprv_app::implementation
         auto active = ActiveTab();
         if (!active)
         {
-            // No active tab — clear the rail selection so nothing's
-            // highlighted while there's no tab to track. Single-click
-            // never opens a tab, so we don't need the old "force re-fire"
-            // workaround for the previously-selected item.
+            // No active VM tab: clear its highlight. Actual mouse gestures,
+            // including a tap on an already-selected row, activate tabs.
             if (list.SelectedItem()) list.SelectedItem(nullptr);
             return;
         }
@@ -2639,7 +2644,7 @@ namespace winrt::hyprv_app::implementation
         // OnRemoteRailSelectionChanged with no AddedItems → returns early).
         if (auto rl = remoteHostsList())
             if (rl.SelectedItem()) rl.SelectedItem(nullptr);
-        HyprvAppLog(L"[ui] rail VM selected guid=%s (single-click — no tab open)",
+        HyprvAppLog(L"[ui] rail VM selected guid=%s",
             std::wstring{ tag }.c_str());
     }
 

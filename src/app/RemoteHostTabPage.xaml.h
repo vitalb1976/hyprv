@@ -53,6 +53,7 @@ namespace winrt::hyprv_app::implementation
         // calls this from OnTabCloseRequested before removing the TabViewItem.
         void ShutdownClient();
         void Disconnect();
+        void ReconnectIfDisconnected();
 
         // Apply changed per-host settings (RDP options / credentials) to a LIVE
         // session by respawning the rdphost child — StartConnection re-resolves

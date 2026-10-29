@@ -81,6 +81,7 @@ namespace winrt::hyprv_app::implementation
         // orphaned until process exit. Idempotent.
         void ShutdownClient();
         void Disconnect();
+        void ReconnectIfDisconnected();
 
         // XAML event — Start button inside the placeholder overlay.
         void OnPlaceholderStartClick(Windows::Foundation::IInspectable const&,

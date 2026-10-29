@@ -137,6 +137,14 @@ namespace winrt::hyprv_app::implementation
         }
     }
 
+    void RemoteHostTabPage::ReconnectIfDisconnected()
+    {
+        // A first tap may have just started loading/connecting this page.
+        // Keep a live session or in-flight attempt intact on the second tap.
+        if (m_connected || m_connecting || !m_loaded) return;
+        OnPlaceholderActionClick(nullptr, nullptr);
+    }
+
     void RemoteHostTabPage::Disconnect()
     {
         m_autoConnect = false;

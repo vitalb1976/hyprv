@@ -181,6 +181,9 @@ namespace winrt::hyprv_app::implementation
 
         // Add a session-only action to a left-list context menu. Resolve the
         // current tab on opening/click, since list items outlive their tabs.
+        // Single tap opens/selects; double tap also retries a disconnected session.
+        void ActivateListEntry(hstring const& key, bool remoteHost, bool reconnect);
+
         void AddListDisconnect(Microsoft::UI::Xaml::Controls::MenuFlyout const& menu,
                                hstring const& key, bool remoteHost);
 
