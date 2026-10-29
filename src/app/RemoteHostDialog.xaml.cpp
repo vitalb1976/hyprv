@@ -5,6 +5,7 @@
 #endif
 
 #include "settings/Settings.h"
+#include "../shared/RdpCredentials.h"
 
 #include <cmath>
 #include <string>
@@ -68,6 +69,8 @@ namespace winrt::hyprv_app::implementation
         if (auto b = domainBox())  b.Text(winrt::hstring{ h.domain });
         if (auto b = portBox())    b.Value(static_cast<double>(h.port ? h.port : 3389));
         LoadRdpControls(h.rdp);
+        const auto target = hyprv::credentials::Target(h.address, h.port, h.domain, h.username);
+        savePasswordCheck().IsChecked(hyprv::credentials::StoredPassword(target).Exists());
         Title(box_value(winrt::hstring{ L"Edit remote host" }));
     }
 
@@ -124,6 +127,56 @@ namespace winrt::hyprv_app::implementation
         // from RdpDefaults on add / the host's saved options on edit).
         host.rdp      = ReadRdpControls();
 
+        const auto checked = savePasswordCheck().IsChecked();
+        const bool savePassword = checked && checked.Value();
+        hyprv::credentials::PasswordInput password;
+        password.value = std::wstring{ passwordBox().Password() };
+        const auto target = hyprv::credentials::Target(address, port, domain, user);
+        const auto previousTarget = m_isEdit
+            ? hyprv::credentials::Target(m_origHost.address, m_origHost.port,
+                m_origHost.domain, m_origHost.username) : std::wstring{};
+        const bool passwordChanged = !password.value.empty();
+        const bool previouslySaved = m_isEdit && hyprv::credentials::StoredPassword(previousTarget).Exists();
+        if ((savePassword && user.empty()) || (!savePassword && passwordChanged))
+        {
+            ShowError(savePassword ? L"Enter a user name before saving a password."
+                                   : L"Check Save password to store the entered password, or clear the Password field.");
+            args.Cancel(true);
+            return;
+        }
+        if (savePassword)
+        {
+            if (passwordChanged)
+            {
+                const auto account = domain.empty() ? user : domain + L"\\" + user;
+                if (!hyprv::credentials::Save(target, account, password.value))
+                {
+                    ShowError(L"Windows could not save the password (error " + std::to_wstring(GetLastError()) + L").");
+                    args.Cancel(true);
+                    return;
+                }
+            }
+            else if (!hyprv::credentials::StoredPassword(target).Valid())
+            {
+                ShowError(L"Enter a password for this computer, port and account.");
+                args.Cancel(true);
+                return;
+            }
+        }
+        else if (!hyprv::credentials::Remove(target))
+        {
+            ShowError(L"Windows could not remove the saved password (error " + std::to_wstring(GetLastError()) + L").");
+            args.Cancel(true);
+            return;
+        }
+        if (m_isEdit && previousTarget != target && !hyprv::credentials::Remove(previousTarget))
+        {
+            ShowError(L"Windows could not remove the old account's saved password (error " + std::to_wstring(GetLastError()) + L").");
+            args.Cancel(true);
+            return;
+        }
+        passwordBox().Password(L"");
+
         // On an edit, recommend a live reconnect when any connection-affecting
         // field changed (a display-name-only edit must NOT churn the session).
         m_reconnect = m_isEdit &&
@@ -131,7 +184,8 @@ namespace winrt::hyprv_app::implementation
               || port != m_origHost.port
               || _wcsicmp(user.c_str(),   m_origHost.username.c_str()) != 0
               || _wcsicmp(domain.c_str(), m_origHost.domain.c_str())   != 0
-              || RdpDiffers(host.rdp, m_origHost.rdp) );
+              || RdpDiffers(host.rdp, m_origHost.rdp)
+              || passwordChanged || savePassword != previouslySaved );
 
         settings.AddOrUpdateRemoteHost(m_originalAddress, host);
         m_savedAddress = address;

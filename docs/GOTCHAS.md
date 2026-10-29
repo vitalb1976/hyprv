@@ -279,3 +279,21 @@ These are the subtle, expensive-to-rediscover invariants behind hyprv. **This fi
 ## Project structure / naming
 
 59. **Do NOT rename the WinRT projection `hyprv_app` → `hyprv`.** It was attempted once and reverted. The repo and the EXE are both named `hyprv`; the main project lives at `src/app/` (vcxproj `src/app/hyprv.vcxproj`), its `<RootNamespace>` is `hyprv_app` (matches the projection `winrt::hyprv_app::`), and its `<TargetName>` is `hyprv` (produces `hyprv.exe`). **The `_app` suffix on the projection is load-bearing.** Reason: the WinRT projection lives at `winrt::hyprv_app::` while our internal C++ code lives at `::hyprv::` (`hyprv::ipc`, `hyprv::wmi`, `hyprv::app::settings`, `hyprv::app::vm`, `hyprv::rdphost`). If the projection were `winrt::hyprv::`, then inside any `winrt::hyprv::implementation` block an unqualified `hyprv::` lookup finds `winrt::hyprv` (the enclosing namespace) FIRST, and our internal `::hyprv::` becomes unreachable without a leading `::`. MSVC reports `'app': the symbol to the left of a '::' must be a type` because it resolves `hyprv::app` as `winrt::hyprv::app`. The `_app` suffix is the standard pattern for exactly this case — a project whose root namespace would otherwise collide with its internal one. (`CLAUDE.md` carries only the one-line "do not rename" rule and points here.)
+
+
+## Saved Remote Host passwords
+
+RemoteHostDialog can store a password in the current user's Windows Credential
+Manager as a local-persistent generic credential under hyprv/rdp/. The key
+includes address, port, domain and username with length-prefixed components.
+Password edits are explicit: blank preserves the current credential, unchecking
+Save password removes it, and a changed destination/account requires re-entry.
+Forgetting the remote host also attempts credential removal.
+
+RdpHost reads the credential itself under its inherited Windows user identity.
+Passwords are not JSON fields, IPC payloads, command-line arguments, or log
+messages. Apply UserName, Domain and IMsTscNonScriptable::ClearTextPassword before
+Connect; disable PromptForCredsOnClient only after all three setters succeed.
+Without a usable credential, preserve the existing clean client-prompt path.
+The retrieved credential blob and temporary BSTR are wiped before freeing.
+This applies to generic Remote Hosts, not Hyper-V basic console guest logons.

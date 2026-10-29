@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Settings.h"
+#include "../../shared/RdpCredentials.h"
 
 #include <shlobj.h>           // SHGetKnownFolderPath, FOLDERID_LocalAppData
 #include <winrt/Windows.Data.Json.h>
@@ -395,6 +396,12 @@ namespace hyprv::app::settings
     void Settings::RemoveRemoteHost(std::wstring const& address)
     {
         if (address.empty()) return;
+        if (auto host = FindRemoteHost(address))
+        {
+            if (!hyprv::credentials::Remove(hyprv::credentials::Target(
+                    host->address, host->port, host->domain, host->username)))
+                HyprvAppLog(L"[settings] credential removal failed: %lu", GetLastError());
+        }
         {
             std::lock_guard<std::mutex> lk(m_lock);
             auto it = std::remove_if(m_remoteHosts.begin(), m_remoteHosts.end(),

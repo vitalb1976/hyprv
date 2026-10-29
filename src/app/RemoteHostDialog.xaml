@@ -97,9 +97,13 @@
                          PlaceholderText="Optional" />
             </Grid>
 
-            <TextBlock Style="{StaticResource HintText}"
-                       Margin="0,12,0,0"
-                       Text="You'll be asked for your password each time you connect — hyprv never stores it. Windows can still remember it via its own sign-in prompt." />
+            <PasswordBox x:Name="passwordBox" Header="Password"
+                         FontSize="12" MinHeight="28" Margin="0,10,0,0"
+                         PlaceholderText="Enter a password to save or replace" />
+            <CheckBox x:Name="savePasswordCheck" Content="Save password"
+                      Margin="0,4,0,0" IsChecked="False" />
+            <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0"
+                       Text="Stored in Windows Credential Manager for this Windows account. Leave Password blank to keep an existing saved password. Uncheck Save password to remove it." />
 
             <!-- Per-host Remote Desktop options. Collapsed by default so the form
                  stays compact; a new host seeds these from Settings → Remote

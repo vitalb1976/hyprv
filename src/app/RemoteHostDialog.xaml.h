@@ -9,8 +9,8 @@
 namespace winrt::hyprv_app::implementation
 {
     // Add / edit a saved Remote Host (a modal ContentDialog). Compact form:
-    // display name, computer (address), port, user name, domain. NO password —
-    // the "prompt every time" model means mstscax asks on connect. On Save it
+    // display name, computer (address), port, user name, domain, and an optional
+    // password stored separately in Windows Credential Manager. On Save it
     // validates + writes the host through Settings::AddOrUpdateRemoteHost and
     // stashes the saved address; the opener reads SavedAddress() after ShowAsync
     // to open / refresh the host's tab + rail entry.

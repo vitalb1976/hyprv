@@ -1,4 +1,5 @@
 #include "RdpHost.h"
+#include "../shared/RdpCredentials.h"
 #include "IpcClient.h"
 
 #include <atlbase.h>
@@ -469,17 +470,33 @@ namespace hyprv::rdphost
         rdp->put_ColorDepth(opt.colorDepth ? opt.colorDepth : 32);
         rdp->put_DesktopWidth(opt.desktopWidth ? opt.desktopWidth : 1024);
         rdp->put_DesktopHeight(opt.desktopHeight ? opt.desktopHeight : 768);
-        // Deliberately do NOT pre-set put_UserName / put_Domain. With NLA +
-        // PromptForCredsOnClient, supplying a username but no password makes the
-        // control attempt an authentication pass with incomplete credentials
-        // (or the logged-in user's SSO creds), the server rejects it, and the
-        // credential dialog then appears carrying "The logon attempt failed."
-        // Supplying NO credentials lets the control show a CLEAN credential
-        // prompt first (what PromptForCredsOnClient is for). The saved username
-        // therefore won't pre-fill the FIRST prompt; Windows remembers it via
-        // its own TERMSRV/<host> store for subsequent connects. (wUser/wDomain
-        // are still logged above for diagnostics.) See gotcha #43.
-        (void)wUser; (void)wDomain;
+        // Read the current Windows user's credential directly in the child.
+        // The password never crosses the IPC pipe or enters settings.json.
+        bool savedPasswordApplied = false;
+        {
+            const auto target = hyprv::credentials::Target(wServer, opt.port, wDomain, wUser);
+            hyprv::credentials::StoredPassword password(target);
+            CComQIPtr<IMsTscNonScriptable> secure(m_impl->unk);
+            if (password.Valid() && secure)
+            {
+                BSTR secret = SysAllocStringLen(password.Data(), password.Length());
+                if (secret)
+                {
+                    const HRESULT userHr = rdp->put_UserName(CComBSTR(wUser.c_str()));
+                    const HRESULT domainHr = rdp->put_Domain(CComBSTR(wDomain.c_str()));
+                    const HRESULT passwordHr = secure->put_ClearTextPassword(secret);
+                    savedPasswordApplied = SUCCEEDED(userHr) && SUCCEEDED(domainHr) && SUCCEEDED(passwordHr);
+                    SecureZeroMemory(secret, SysStringByteLen(secret));
+                    SysFreeString(secret);
+                    if (!savedPasswordApplied)
+                    {
+                        secure->ResetPassword();
+                        rdp->put_UserName(CComBSTR(L""));
+                        rdp->put_Domain(CComBSTR(L""));
+                    }
+                }
+            }
+        }
 
         CComPtr<IMsRdpClientAdvancedSettings6> adv6;
         if (FAILED(rdp->get_AdvancedSettings7(&adv6)) || !adv6)
@@ -541,19 +558,16 @@ namespace hyprv::rdphost
             adv7->put_AudioCaptureRedirectionMode(
                 (opt.flags & hyprv::ipc::Flag_AudioCaptureRedirect) ? VARIANT_TRUE : VARIANT_FALSE);
 
-        // --- NLA / credential prompt ---
-        // Enable CredSSP and ask mstscax to prompt for credentials on the client
-        // side (we never carry a password). With a saved username pre-filled the
-        // user only types the password; Windows' own credential store still
-        // offers "remember me". EnableCredSspSupport lives on
-        // IMsRdpClientNonScriptable3; PromptForCredsOnClient on NonScriptable4.
+        // Enable NLA. Prompt locally unless a complete saved credential was
+        // successfully applied above; incomplete/missing credentials keep the
+        // original clean-prompt path.
         CComQIPtr<IMsRdpClientNonScriptable3> ns3(m_impl->unk);
         if (ns3)
             ns3->put_EnableCredSspSupport(VARIANT_TRUE);
         CComQIPtr<IMsRdpClientNonScriptable4> ns4(m_impl->unk);
         if (ns4)
         {
-            HRESULT pr = ns4->put_PromptForCredsOnClient(VARIANT_TRUE);
+            HRESULT pr = ns4->put_PromptForCredsOnClient(savedPasswordApplied ? VARIANT_FALSE : VARIANT_TRUE);
             HyprvLog(L"[host] put_PromptForCredsOnClient hr=0x%08lx", pr);
         }
         else
