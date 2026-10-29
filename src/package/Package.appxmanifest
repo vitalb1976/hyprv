@@ -10,8 +10,8 @@
 
   <Identity
     Name="hyprv"
-    Publisher="CN=John Shaw, O=John Shaw, L=Longmont, S=CO, C=US"
-    Version="1.0.0.1" />
+    Publisher="CN=Vital, OID.2.25.311729368913984317654407730594956997722=1"
+    Version="1.0.0.2" />
 
   <Properties>
     <DisplayName>hyprv - Hyper-V Manager</DisplayName>

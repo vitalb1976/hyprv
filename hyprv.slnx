@@ -8,5 +8,9 @@
     <BuildDependency Project="src/rdphost/hyprv-rdphost.vcxproj" />
     <Deploy />
   </Project>
+  <Project Path="src/package/hyprv-package.wapproj" Type="c7167f0d-bc9f-4e6e-afe1-012c56b48db5" Id="7f3e2a10-9c4b-4d8e-a1f2-3b6c5d4e7f80">
+    <Platform Solution="*|x86" Project="x64" />
+    <Deploy />
+  </Project>
   <Project Path="src/rdphost/hyprv-rdphost.vcxproj" Id="6d8b7c13-9f2d-4f5a-a7e1-1b2c3d4e5f60" />
 </Solution>

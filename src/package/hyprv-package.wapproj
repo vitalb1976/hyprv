@@ -44,6 +44,9 @@
     <AppxPackageDir>$(SolutionDir)dist\msix\</AppxPackageDir>
     <OutDir>$(SolutionDir)src\obj\$(MSBuildProjectName)\$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)src\obj\$(MSBuildProjectName)\$(Platform)\$(Configuration)\</IntDir>
+    <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
+    <GenerateTestArtifacts>False</GenerateTestArtifacts>
+    <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
   </PropertyGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
